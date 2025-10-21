@@ -26,6 +26,7 @@
         "views/mrp_inventory_views.xml",
         "views/mrp_planned_order_views.xml",
         "wizards/mrp_multi_level_views.xml",
+        "wizards/product_mrp_area_create.xml",
         "views/mrp_move_views.xml",
         "views/mrp_menuitem.xml",
         "data/mrp_multi_level_cron.xml",
