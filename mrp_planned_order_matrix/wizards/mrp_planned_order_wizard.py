@@ -205,7 +205,7 @@ class MprPlannedOrderSheet(models.TransientModel):
             "domain": [("id", "in", res_ids)],
             "name": _("Planned Orders"),
             "src_model": "mrp.planned.order.wizard",
-            "view_mode": "tree,form,pivot",
+            "view_mode": "list,form,pivot",
             "res_model": "mrp.planned.order",
             "type": "ir.actions.act_window",
         }
