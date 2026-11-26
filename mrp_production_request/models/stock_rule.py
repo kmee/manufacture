@@ -1,7 +1,7 @@
 # Copyright 2018-20 ForgeFlow S.L.
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl).
 
-from odoo import _, models
+from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
 
@@ -31,15 +31,36 @@ class StockRule(models.Model):
             values,
             bom,
         )
+        # Campos da ordem de produção que não existem no pedido de produção
+        data["date_planned_start"] = data.get("date_start") or fields.Datetime.now()
+        data["date_planned_finished"] = (
+            data.get("date_deadline") or data["date_planned_start"]
+        )
+        data["propagate"] = data.get("propagate_cancel", False)
         for key in [
+            "date_start",
             "date_deadline",
             "propagate_cancel",
-            "propagate_date",
-            "propagate_date_minimum_delta",
             "user_id",
+            "name",
+            "location_final_id",
+            "product_description_variants",
+            "never_product_template_attribute_value_ids",
+            "procurement_group_id",
         ]:
-            data.pop(key)
+            data.pop(key, None)
+        picking_type = self.env["stock.picking.type"].browse(
+            data.get("picking_type_id")
+        )
+        fallback_loc = picking_type.warehouse_id.lot_stock_id
+        for key in ("location_src_id", "location_dest_id"):
+            if not data.get(key):
+                data[key] = fallback_loc.id
         data["state"] = "to_approve"
+        # outros módulos acrescentam chaves à ordem de produção (ex.: is_sub_mo)
+        # que não existem no pedido de produção
+        request_fields = self.env["mrp.production.request"]._fields
+        data = {key: value for key, value in data.items() if key in request_fields}
         orderpoint = values.get("orderpoint_id")
         if orderpoint:
             data["orderpoint_id"] = orderpoint.id
@@ -65,9 +86,7 @@ class StockRule(models.Model):
         """Trying to handle this as much similar as possible to Odoo
         production orders. See `_run_manufacture` in Odoo standard."""
         request_obj = self.env["mrp.production.request"]
-        request_obj_sudo = request_obj.sudo().with_context(
-            force_company=values["company_id"].id
-        )
+        request_obj_sudo = request_obj.sudo().with_company(company_id)
         bom = self._get_matching_bom(product_id, company_id, values)
         if not bom:
             raise UserError(
@@ -100,19 +119,20 @@ class StockRule(models.Model):
         )
         orderpoint = values.get("orderpoint_id")
         if orderpoint:
-            request.message_post_with_view(
+            request.message_post_with_source(
                 "mail.message_origin_link",
-                values={"self": request, "origin": orderpoint},
+                render_values={"self": request, "origin": orderpoint},
                 subtype_id=self.env.ref("mail.mt_note").id,
             )
         if origin_production:
-            request.message_post_with_view(
+            request.message_post_with_source(
                 "mail.message_origin_link",
-                values={"self": request, "origin": origin_production},
+                render_values={"self": request, "origin": origin_production},
                 subtype_id=self.env.ref("mail.mt_note").id,
             )
         return True
 
+    @api.model
     def _run_manufacture(self, procurements):
         no_mr_procs = []
         for procurement, _rule in procurements:

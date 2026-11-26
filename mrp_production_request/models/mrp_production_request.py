@@ -19,51 +19,42 @@ class MrpProductionRequest(models.Model):
         default="/",
         required=True,
         readonly=True,
-        states={"draft": [("readonly", False)]},
     )
-    origin = fields.Char(
-        string="Source Document", readonly=True, states={"draft": [("readonly", False)]}
-    )
+    origin = fields.Char(string="Source Document")
     requested_by = fields.Many2one(
         comodel_name="res.users",
         string="Requested by",
         default=lambda self: self._get_default_requested_by(),
         required=True,
-        track_visibility="onchange",
-        readonly=True,
-        states={"draft": [("readonly", False)]},
+        tracking=True,
     )
     assigned_to = fields.Many2one(
         comodel_name="res.users",
         string="Approver",
-        track_visibility="onchange",
-        readonly=True,
-        states={"draft": [("readonly", False)]},
+        tracking=True,
         domain=lambda self: [
             (
                 "groups_id",
                 "in",
                 self.env.ref(
-                    "mrp_production_request." "group_mrp_production_request_manager"
+                    "mrp_production_request.group_mrp_production_request_manager"
                 ).id,
             )
         ],
     )
-    description = fields.Text("Description")
+    description = fields.Text()
     date_planned_start = fields.Datetime(
         "Deadline Start",
         copy=False,
         default=fields.Datetime.now,
         index=True,
         required=True,
-        states={"confirmed": [("readonly", False)]},
     )
     date_planned_finished = fields.Datetime(
         "Deadline End",
         copy=False,
         default=fields.Datetime.now,
         index=True,
-        states={"confirmed": [("readonly", False)]},
     )
     company_id = fields.Many2one(
         comodel_name="res.company",
@@ -89,7 +80,7 @@ class MrpProductionRequest(models.Model):
             ("cancel", "Cancelled"),
         ],
         index=True,
-        track_visibility="onchange",
+        tracking=True,
         required=True,
         copy=False,
         default="draft",
@@ -107,10 +98,8 @@ class MrpProductionRequest(models.Model):
         comodel_name="product.product",
         string="Product",
         required=True,
-        domain=[("type", "in", ["product", "consu"])],
-        track_visibility="onchange",
-        readonly=True,
-        states={"draft": [("readonly", False)]},
+        domain=[("type", "=", "consu")],
+        tracking=True,
     )
     product_tmpl_id = fields.Many2one(
         comodel_name="product.template",
@@ -120,17 +109,13 @@ class MrpProductionRequest(models.Model):
     product_qty = fields.Float(
         string="Required Quantity",
         required=True,
-        track_visibility="onchange",
+        tracking=True,
         digits="Product Unit of Measure",
         default=1.0,
-        readonly=True,
-        states={"draft": [("readonly", False)]},
     )
     product_uom_id = fields.Many2one(
         comodel_name="uom.uom",
         string="Unit of Measure",
-        readonly=True,
-        states={"draft": [("readonly", False)]},
         domain="[('category_id', '=', category_uom_id)]",
     )
     category_uom_id = fields.Many2one(related="product_uom_id.category_id")
@@ -163,49 +148,24 @@ class MrpProductionRequest(models.Model):
         comodel_name="mrp.bom",
         string="Bill of Materials",
         required=True,
-        readonly=True,
-        states={"draft": [("readonly", False)]},
-    )
-    routing_id = fields.Many2one(
-        comodel_name="mrp.routing",
-        string="Routing",
-        on_delete="setnull",
-        readonly=True,
-        states={"draft": [("readonly", False)]},
-        help="The list of operations (list of work centers) to produce "
-        "the finished product. The routing is mainly used to compute "
-        "work center costs during operations and to plan future loads "
-        "on work centers based on production plannification.",
-    )
-    location_src_id = fields.Many2one(
-        comodel_name="stock.location",
-        string="Raw Materials Location",
-        default=lambda self: self.env["stock.location"].browse(
-            self.env["mrp.production"]._get_default_location_src_id()
-        ),
-        required=True,
-        readonly=True,
-        states={"draft": [("readonly", False)]},
-    )
-    location_dest_id = fields.Many2one(
-        comodel_name="stock.location",
-        string="Finished Products Location",
-        default=lambda self: self.env["stock.location"].browse(
-            self.env["mrp.production"]._get_default_location_dest_id()
-        ),
-        required=True,
-        readonly=True,
-        states={"draft": [("readonly", False)]},
     )
     picking_type_id = fields.Many2one(
         comodel_name="stock.picking.type",
         string="Picking Type",
-        default=lambda self: self.env["stock.picking.type"].browse(
-            self.env["mrp.production"]._get_default_picking_type()
-        ),
+        default=lambda self: self._get_default_picking_type(),
         required=True,
-        readonly=True,
-        states={"draft": [("readonly", False)]},
+    )
+    location_src_id = fields.Many2one(
+        comodel_name="stock.location",
+        string="Raw Materials Location",
+        default=lambda self: self._get_default_location("src"),
+        required=True,
+    )
+    location_dest_id = fields.Many2one(
+        comodel_name="stock.location",
+        string="Finished Products Location",
+        default=lambda self: self._get_default_location("dest"),
+        required=True,
     )
     move_dest_ids = fields.One2many(
         comodel_name="stock.move",
@@ -225,8 +185,38 @@ class MrpProductionRequest(models.Model):
     ]
 
     @api.model
+    def _get_default_picking_type(self):
+        return self.env["mrp.production"]._get_default_picking_type_id(
+            self.env.company.id
+        )
+
+    @api.model
+    def _get_default_location(self, kind):
+        picking_type = self.env["stock.picking.type"].browse(
+            self._get_default_picking_type()
+        )
+        location = (
+            picking_type.default_location_src_id
+            if kind == "src"
+            else picking_type.default_location_dest_id
+        )
+        return location.id or picking_type.warehouse_id.lot_stock_id.id
+
+    @api.onchange("picking_type_id")
+    def _onchange_picking_type_id(self):
+        if self.picking_type_id:
+            self.location_src_id = (
+                self.picking_type_id.default_location_src_id
+                or self.picking_type_id.warehouse_id.lot_stock_id
+            )
+            self.location_dest_id = (
+                self.picking_type_id.default_location_dest_id
+                or self.picking_type_id.warehouse_id.lot_stock_id
+            )
+
+    @api.model
     def _get_mo_valid_states(self):
-        return ["planned", "confirmed", "progress", "done"]
+        return ["confirmed", "progress", "to_close", "done"]
 
     @api.depends("mrp_production_ids", "mrp_production_ids.state", "state")
     def _compute_manufactured_qty(self):
@@ -251,10 +241,10 @@ class MrpProductionRequest(models.Model):
         if self.product_id:
             self.product_uom_id = self.product_id.uom_id
             self.bom_id = self.env["mrp.bom"]._bom_find(
-                product=self.product_id,
-                company_id=self.company_id.id,
+                self.product_id,
                 picking_type=self.picking_type_id,
-            )
+                company_id=self.company_id.id,
+            )[self.product_id]
 
     def _subscribe_assigned_user(self, vals):
         self.ensure_one()
@@ -271,14 +261,15 @@ class MrpProductionRequest(models.Model):
             )
         return vals
 
-    @api.model
-    def create(self, vals):
+    @api.model_create_multi
+    def create(self, vals_list):
         """Add sequence if name is not defined and subscribe to the thread
         the user assigned to the request."""
-        vals = self._create_sequence(vals)
-        res = super().create(vals)
-        res._subscribe_assigned_user(vals)
-        return res
+        vals_list = [self._create_sequence(vals) for vals in vals_list]
+        records = super().create(vals_list)
+        for record, vals in zip(records, vals_list, strict=False):
+            record._subscribe_assigned_user(vals)
+        return records
 
     def write(self, vals):
         res = super().write(vals)
@@ -335,8 +326,7 @@ class MrpProductionRequest(models.Model):
         return True
 
     def action_view_mrp_productions(self):
-        action = self.env.ref("mrp.mrp_production_action")
-        result = action.read()[0]
+        result = self.env["ir.actions.actions"]._for_xml_id("mrp.mrp_production_action")
         result["context"] = {}
         mos = self.mapped("mrp_production_ids")
         # choose the view_mode accordingly

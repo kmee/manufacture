@@ -1,0 +1,5 @@
+- Lois Rilo Antelo <lois.rilo@forgeflow.com>
+- Jordi Ballester <jordi.ballester@forgeflow.com>
+- Chandresh Thakkar <chandresh.thakkar.serpentcs@gmail.com>
+- KMEE <https://www.kmee.com.br>
+  - Luis Felipe Mileo <mileo@kmee.com.br>

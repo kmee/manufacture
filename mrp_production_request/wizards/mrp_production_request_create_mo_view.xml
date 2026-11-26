@@ -21,13 +21,13 @@
                     </group>
                     <group colspan="4">
                         <field name="product_line_ids" nolabel="1">
-                            <tree>
+                            <list>
                                 <field name="product_id" />
                                 <field name="product_uom_id" />
                                 <field name="product_qty" />
                                 <field name="available_qty" />
                                 <field name="bottle_neck_factor" />
-                            </tree>
+                            </list>
                         </field>
                     </group>
                 </group>
@@ -51,11 +51,11 @@
                 </group>
                 <footer>
                     <button
-                        name="create_mo"
-                        type="object"
-                        string="Create MO"
-                        class="oe_highlight"
-                    />
+                    name="create_mo"
+                    type="object"
+                    string="Create MO"
+                    class="oe_highlight"
+                />
                     or
                     <button special="cancel" string="Cancel" />
                 </footer>

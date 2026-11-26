@@ -3,10 +3,12 @@
 
 from odoo import fields
 from odoo.exceptions import UserError
+from odoo.tests import tagged
 from odoo.tests.common import TransactionCase
 from odoo.tools import mute_logger
 
 
+@tagged("post_install", "-at_install")
 class TestMrpProductionRequest(TransactionCase):
     def setUp(self, *args, **kwargs):
         super().setUp(*args, **kwargs)
@@ -24,13 +26,19 @@ class TestMrpProductionRequest(TransactionCase):
         route_manuf = self.env.ref("mrp.route_warehouse0_manufacture")
 
         # Prepare Products:
-        self.product = self.env.ref("product.product_product_3")
-        self.product.mrp_production_request = True
-        self.product.route_ids = [(4, route_manuf.id, 0)]
+        self.product = self.product_model.create(
+            {
+                "name": "Test Product",
+                "is_storable": True,
+                "mrp_production_request": True,
+                "route_ids": [(6, 0, route_manuf.ids)],
+            }
+        )
 
         self.product_no_bom = self.product_model.create(
             {
                 "name": "Test Product without BoM",
+                "is_storable": True,
                 "mrp_production_request": True,
                 "route_ids": [(6, 0, route_manuf.ids)],
             }
@@ -38,6 +46,7 @@ class TestMrpProductionRequest(TransactionCase):
         self.product_orderpoint = self.product_model.create(
             {
                 "name": "Test Product for orderpoint",
+                "is_storable": True,
                 "mrp_production_request": True,
                 "route_ids": [(6, 0, route_manuf.ids)],
             }
@@ -45,6 +54,7 @@ class TestMrpProductionRequest(TransactionCase):
         product_component = self.product_model.create(
             {
                 "name": "Test component",
+                "is_storable": True,
                 "mrp_production_request": True,
                 "route_ids": [(6, 0, route_manuf.ids)],
             }
@@ -68,6 +78,20 @@ class TestMrpProductionRequest(TransactionCase):
             }
         )
 
+        # BoM for the test product
+        self.test_bom_0 = self.bom_model.create(
+            {
+                "product_id": self.product.id,
+                "product_tmpl_id": self.product.product_tmpl_id.id,
+                "product_uom_id": self.product.uom_id.id,
+                "product_qty": 1.0,
+                "type": "normal",
+                "bom_line_ids": [
+                    (0, 0, {"product_id": product_component.id, "product_qty": 2.0})
+                ],
+            }
+        )
+
         # Create Orderpoint:
         self.orderpoint = self.env["stock.warehouse.orderpoint"].create(
             {
@@ -87,9 +111,7 @@ class TestMrpProductionRequest(TransactionCase):
         self.test_user = self.env["res.users"].create({"name": "John", "login": "test"})
 
     def procure(self, group, product, qty=4.0):
-        warehouse = self.env["stock.warehouse"].search(
-            [("company_id", "=", self.env.user.id)], limit=1
-        )
+        warehouse = self.warehouse
         values = {
             "date_planned": fields.Datetime.now(),
             "group_id": group,
@@ -121,13 +143,23 @@ class TestMrpProductionRequest(TransactionCase):
             ]
         )
         self.assertEqual(len(request), 1)
+        if "assigned_to_ids" in request._fields:
+            # with an approval extension installed, only approvers can approve
+            admin = self.env.ref("base.user_admin")
+            admin.groups_id |= self.env.ref(
+                "mrp_production_request.group_mrp_production_request_manager"
+            )
+            request.assigned_to_ids = admin
+            request = request.with_user(admin)
         request.button_to_approve()
         request.button_draft()
         request.button_to_approve()
         request.button_approved()
         self.assertEqual(request.pending_qty, 4.0)
         wiz = self.wiz_model.with_context(
-            active_ids=request.ids, active_model="mrp.production.request"
+            active_ids=request.ids,
+            active_id=request.id,
+            active_model="mrp.production.request",
         ).create({})
         wiz.compute_product_line_ids()
         wiz.mo_qty = 4.0
@@ -136,7 +168,14 @@ class TestMrpProductionRequest(TransactionCase):
             [("mrp_production_request_id", "=", request.id)]
         )
         self.assertTrue(mo, "No MO created.")
+        self.assertEqual(request.mrp_production_count, 1)
+        self.assertEqual(mo.product_qty, 4.0)
+        self.assertEqual(mo.date_start, request.date_planned_start)
+        self.assertEqual(sum(mo.move_raw_ids.mapped("product_uom_qty")), 8.0)
         self.assertEqual(request.pending_qty, 4.0)
+        mo.action_confirm()
+        self.assertEqual(request.manufactured_qty, 4.0)
+        self.assertEqual(request.pending_qty, 0.0)
         request.button_done()
 
     def test_02_assignation(self):
@@ -151,6 +190,7 @@ class TestMrpProductionRequest(TransactionCase):
             }
         )
         request._onchange_product_id()
+        self.assertEqual(request.product_uom_id, self.product.uom_id)
         self.assertEqual(
             request.bom_id.product_tmpl_id,
             self.product.product_tmpl_id,
