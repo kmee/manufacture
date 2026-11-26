@@ -1,26 +1,47 @@
 # Copyright 2025 ForgeFlow S.L. (http://www.forgeflow.com)
 # License AGPL-3 - See http://www.gnu.org/licenses/agpl-3.0.html
 
-from odoo.tests import Form
+from odoo.tests import Form, tagged
 from odoo.tests.common import TransactionCase
 
 
+@tagged("post_install", "-at_install")
 class TestMrpProductionQuantManualAssign(TransactionCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
         cls.quant_assign_wizard = cls.env["assign.manual.quants"]
         cls.parent_serial = cls.env["product.product"].create(
-            {"name": "Parent - Serial", "type": "product", "tracking": "serial"}
+            {
+                "name": "Parent - Serial",
+                "type": "consu",
+                "is_storable": True,
+                "tracking": "serial",
+            }
         )
         cls.component_normal = cls.env["product.product"].create(
-            {"name": "Component - Normal", "type": "product", "tracking": "none"}
+            {
+                "name": "Component - Normal",
+                "type": "consu",
+                "is_storable": True,
+                "tracking": "none",
+            }
         )
         cls.component_lot = cls.env["product.product"].create(
-            {"name": "Component - Lot", "type": "product", "tracking": "lot"}
+            {
+                "name": "Component - Lot",
+                "type": "consu",
+                "is_storable": True,
+                "tracking": "lot",
+            }
         )
         cls.component_serial = cls.env["product.product"].create(
-            {"name": "Component - Serial", "type": "product", "tracking": "serial"}
+            {
+                "name": "Component - Serial",
+                "type": "consu",
+                "is_storable": True,
+                "tracking": "serial",
+            }
         )
         cls.component_consumable = cls.env["product.product"].create(
             {"name": "Component - Consumable", "type": "consu"}
