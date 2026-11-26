@@ -227,3 +227,27 @@ class TestMrpProductionRequest(TransactionCase):
         with self.assertRaises(UserError):
             # No Bill of Materials:
             self.procure(self.test_group, self.product_no_bom)
+
+    def test_wizards_open_for_regular_user(self):
+        user = self.env["res.users"].create(
+            {
+                "name": "Wizard user",
+                "login": "wizard_user_access",
+                "groups_id": [
+                    (
+                        6,
+                        0,
+                        [
+                            self.env.ref(
+                                "mrp_production_request.group_mrp_production_request_user"
+                            ).id
+                        ],
+                    )
+                ],
+            }
+        )
+        for model in (
+            "mrp.production.request.create.mo",
+            "mrp.production.request.create.mo.line",
+        ):
+            self.env[model].with_user(user).check_access("create")
