@@ -16,7 +16,7 @@
         <record id="group_mrp_production_request_manager" model="res.groups">
             <field name="name">Manager</field>
             <field
-                eval="[(4, ref('mrp_production_request.group_mrp_production_request_user'))]"
+                eval="[(4, ref('mrp_production_request.group_mrp_production_request_user')), (4, ref('mrp.group_mrp_user'))]"
                 name="implied_ids"
             />
             <field

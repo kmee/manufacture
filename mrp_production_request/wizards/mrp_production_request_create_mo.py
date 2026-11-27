@@ -81,6 +81,7 @@ class MrpProductionRequestCreateMo(models.TransientModel):
         rec.update(
             {
                 "mrp_production_request_id": active_ids[0],
+                "mo_qty": request[0].pending_qty,
                 "date_planned_start": request[0].date_planned_start,
                 "date_planned_finished": request[0].date_planned_finished,
             }

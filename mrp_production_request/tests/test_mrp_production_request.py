@@ -161,6 +161,7 @@ class TestMrpProductionRequest(TransactionCase):
             active_id=request.id,
             active_model="mrp.production.request",
         ).create({})
+        self.assertEqual(wiz.mo_qty, 4.0)
         wiz.compute_product_line_ids()
         wiz.mo_qty = 4.0
         wiz.create_mo()
@@ -251,3 +252,23 @@ class TestMrpProductionRequest(TransactionCase):
             "mrp.production.request.create.mo.line",
         ):
             self.env[model].with_user(user).check_access("create")
+
+    def test_manager_can_work_on_manufacturing_orders(self):
+        user = self.env["res.users"].create(
+            {
+                "name": "Request manager",
+                "login": "request_manager_mrp",
+                "groups_id": [
+                    (
+                        6,
+                        0,
+                        [
+                            self.env.ref(
+                                "mrp_production_request.group_mrp_production_request_manager"
+                            ).id
+                        ],
+                    )
+                ],
+            }
+        )
+        self.assertTrue(user.has_group("mrp.group_mrp_user"))
