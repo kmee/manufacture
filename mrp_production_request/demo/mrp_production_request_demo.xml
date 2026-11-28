@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo noupdate="1">
+    <record id="product_component_tampo" model="product.product">
+        <field name="name">Tampo de Imbuia 160x90</field>
+        <field name="is_storable" eval="True" />
+        <field name="uom_id" ref="uom.product_uom_unit" />
+        <field name="uom_po_id" ref="uom.product_uom_unit" />
+    </record>
+    <record id="product_component_pe" model="product.product">
+        <field name="name">Pé Torneado de Imbuia</field>
+        <field name="is_storable" eval="True" />
+        <field name="uom_id" ref="uom.product_uom_unit" />
+        <field name="uom_po_id" ref="uom.product_uom_unit" />
+    </record>
+    <record id="product_mesa_jantar" model="product.product">
+        <field name="name">Mesa de Jantar Imbuia 6 Lugares</field>
+        <field name="is_storable" eval="True" />
+        <field name="uom_id" ref="uom.product_uom_unit" />
+        <field name="uom_po_id" ref="uom.product_uom_unit" />
+        <field name="mrp_production_request" eval="True" />
+        <field
+            name="route_ids"
+            eval="[(6, 0, [ref('mrp.route_warehouse0_manufacture')])]"
+        />
+    </record>
+    <record id="mrp_bom_mesa_jantar" model="mrp.bom">
+        <field
+            name="product_tmpl_id"
+            search="[('product_variant_ids', '=', ref('mrp_production_request.product_mesa_jantar'))]"
+        />
+        <field name="product_id" ref="product_mesa_jantar" />
+        <field name="product_qty">1</field>
+        <field name="type">normal</field>
+    </record>
+    <record id="mrp_bom_line_mesa_tampo" model="mrp.bom.line">
+        <field name="bom_id" ref="mrp_bom_mesa_jantar" />
+        <field name="product_id" ref="product_component_tampo" />
+        <field name="product_qty">1</field>
+    </record>
+    <record id="mrp_bom_line_mesa_pe" model="mrp.bom.line">
+        <field name="bom_id" ref="mrp_bom_mesa_jantar" />
+        <field name="product_id" ref="product_component_pe" />
+        <field name="product_qty">4</field>
+    </record>
+    <record id="stock_quant_tampo" model="stock.quant">
+        <field name="product_id" ref="product_component_tampo" />
+        <field name="location_id" ref="stock.stock_location_stock" />
+        <field name="inventory_quantity">12</field>
+    </record>
+    <record id="stock_quant_pe" model="stock.quant">
+        <field name="product_id" ref="product_component_pe" />
+        <field name="location_id" ref="stock.stock_location_stock" />
+        <field name="inventory_quantity">30</field>
+    </record>
+    <function model="stock.quant" name="action_apply_inventory">
+        <value eval="[ref('stock_quant_tampo'), ref('stock_quant_pe')]" />
+    </function>
+    <record id="mrp_production_request_demo_draft" model="mrp.production.request">
+        <field name="product_id" ref="product_mesa_jantar" />
+        <field name="product_uom_id" ref="uom.product_uom_unit" />
+        <field name="bom_id" ref="mrp_bom_mesa_jantar" />
+        <field name="product_qty">5</field>
+        <field name="origin">Reposição de estoque de dezembro</field>
+        <field name="description">Mesas para a coleção de fim de ano.</field>
+    </record>
+    <record id="mrp_production_request_demo_approved" model="mrp.production.request">
+        <field name="product_id" ref="product_mesa_jantar" />
+        <field name="product_uom_id" ref="uom.product_uom_unit" />
+        <field name="bom_id" ref="mrp_bom_mesa_jantar" />
+        <field name="product_qty">3</field>
+        <field name="origin">Encomenda de showroom</field>
+        <field name="state">approved</field>
+    </record>
+</odoo>
