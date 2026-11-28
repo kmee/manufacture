@@ -522,3 +522,72 @@ class TestMrpProductionQuantManualAssign(TransactionCase):
         self.assertEqual(move_line_s484.picked, False)
         self.assertEqual(move_line_s252.quantity, 1)
         self.assertEqual(move_line_s252.picked, False)
+
+    def _clear_selection(self, move):
+        wizard = self._create_wizard(move, self.mo_1)
+        for ql in wizard.quants_lines:
+            ql.selected = False
+            ql.to_consume_now = False
+            ql.qty = 0
+        wizard.assign_quants()
+
+    def test_05_bypass_set_qty_producing_tracked_without_selection(self):
+        # Tracked component without any lot selected is filled automatically
+        self._clear_selection(self.move_lot)
+        self.assertFalse(self.move_lot.quantity)
+        self.assertFalse(self.move_lot._should_bypass_set_qty_producing())
+
+    def test_06_bypass_set_qty_producing_tracked_with_selection(self):
+        # With a lot selected the standard rule applies and the selection is kept
+        lot = self.env["stock.lot"].search(
+            [("name", "=", "L201"), ("product_id", "=", self.component_lot.id)]
+        )
+        self._clear_selection(self.move_lot)
+        wizard = self._create_wizard(self.move_lot, self.mo_1)
+        line = wizard.quants_lines.filtered(lambda ql: ql.lot_id == lot)
+        line.selected = True
+        line.qty = 1
+        wizard.assign_quants()
+        self.assertEqual(self.move_lot.quantity, 1)
+        self.assertFalse(self.move_lot._should_bypass_set_qty_producing())
+        self.move_lot.state = "cancel"
+        self.assertTrue(self.move_lot._should_bypass_set_qty_producing())
+        self.move_lot.state = "assigned"
+        self.mo_1.qty_producing = 1
+        self.assertEqual(self.move_lot.move_line_ids.lot_id, lot)
+        self.assertEqual(self.move_lot.quantity, 1)
+
+    def test_07_bypass_set_qty_producing_untracked(self):
+        # Untracked components keep the standard behaviour
+        self.assertFalse(self.move_normal._should_bypass_set_qty_producing())
+
+    def test_08_unselected_line_with_quantity_drops_move_line(self):
+        self._clear_selection(self.move_normal)
+        wizard = self._create_wizard(self.move_normal, self.mo_1)
+        line = wizard.quants_lines.filtered(lambda ql: ql.location_id == self.location2)
+        line.selected = True
+        line.qty = 1
+        wizard.assign_quants()
+        self.assertEqual(len(self.move_normal.move_line_ids), 1)
+        wizard = self._create_wizard(self.move_normal, self.mo_1)
+        line = wizard.quants_lines.filtered(lambda ql: ql.location_id == self.location2)
+        # Unselected but with quantity left: the move line must be removed
+        line.selected = False
+        wizard.assign_quants()
+        self.assertFalse(self.move_normal.move_line_ids)
+        self.assertEqual(self.move_normal.quantity, 0)
+        self.assertFalse(self.move_normal.picked)
+
+    def test_09_onchange_selected_resets_to_consume_now(self):
+        wizard = self._create_wizard(self.move_normal, self.mo_1)
+        line = wizard.quants_lines.filtered(lambda ql: ql.location_id == self.location2)
+        line.selected = True
+        line.qty = 1
+        line.to_consume_now = True
+        line._onchange_selected()
+        self.assertTrue(line.to_consume_now)
+        self.assertEqual(line.qty, 1)
+        line.selected = False
+        line._onchange_selected()
+        self.assertFalse(line.to_consume_now)
+        self.assertEqual(line.qty, 0)
